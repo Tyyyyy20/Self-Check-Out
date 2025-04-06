@@ -63,6 +63,29 @@ class SelfCheckoutKiosk {
     console.log(`Scanned: ${item.name} - $${item.price}`);
     return true;
   }
+  // Add this method to the SelfCheckoutKiosk class
+  continuousScanning() {
+    if (this.currentScreen !== 'scanning') {
+      this.navigateTo('scanning');
+    }
+    
+    // This would connect to your actual scanner hardware
+    this.scannerActive = true;
+    console.log('Continuous scanning activated - ready to scan multiple items');
+    
+    // In a real implementation, you would connect this to hardware events
+    // For example:
+    // this.scannerDevice.addEventListener('scan', (scanData) => {
+    //   const item = this.lookupItemFromDatabase(scanData);
+    //   this.scanItem(item);
+    // });
+  }
+
+// Add this method to stop scanning
+finishScanning() {
+  this.scannerActive = false;
+  console.log('Scanning completed');
+}
 
   /**
    * Open the discounts section
