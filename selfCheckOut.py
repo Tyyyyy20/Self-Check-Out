@@ -1,12 +1,11 @@
 """
 Self-Checkout Kiosk System
-An improved implementation of a self-checkout system with recurring scanning functionality
+Implementation with while loops for scanning and discount processes
 """
 
 import datetime
 import time
-import threading
-import random  # For simulating barcode scanning in demo
+import random
 
 
 class SelfCheckoutKiosk:
@@ -20,9 +19,8 @@ class SelfCheckoutKiosk:
         self.payment_method = None
         self.payment_status = None
         self.receipt_printed = False
-        self.scanner_active = False
-        self._scanner_thread = None
-        self._scanner_stop_event = threading.Event()
+        
+        # Product database for lookups
         self.product_database = {
             '123456789': {'name': 'Bread', 'price': 2.99},
             '987654321': {'name': 'Milk', 'price': 3.49},
@@ -30,6 +28,13 @@ class SelfCheckoutKiosk:
             '789123456': {'name': 'Bananas', 'price': 1.99},
             '321654987': {'name': 'Coffee', 'price': 5.99},
             '654987321': {'name': 'Cereal', 'price': 4.49},
+        }
+        
+        # Discount database
+        self.discount_database = {
+            'SAVE10': {'code': 'SAVE10', 'amount': 1.00, 'description': '$1.00 off your purchase'},
+            'SPRING25': {'code': 'SPRING25', 'amount': 2.50, 'description': '$2.50 off your purchase'},
+            '5PERCENTOFF': {'code': '5PERCENTOFF', 'description': '5% off your total'}
         }
 
     """
@@ -47,26 +52,6 @@ class SelfCheckoutKiosk:
         return True
 
     """
-    Start the shopping process
-    """
-    def begin_shopping(self):
-        self.navigate_to('scanning')
-        print('Shopping session started')
-        # Automatically start scanning when shopping begins
-        self.start_continuous_scanning()
-
-    """
-    Cancel the current action and return to home
-    """
-    def cancel(self):
-        # Stop scanning if active
-        if self.scanner_active:
-            self.stop_continuous_scanning()
-            
-        self.navigate_to('home')
-        print('Action cancelled, returned to home screen')
-
-    """
     Look up an item in the database by barcode
     """
     def lookup_item(self, barcode):
@@ -75,116 +60,16 @@ class SelfCheckoutKiosk:
         return None
 
     """
-    Scan an item and add it to the cart
+    Add an item to the cart
     """
-    def scan_item(self, item):
-        if self.current_screen != 'scanning':
-            print('Error: Cannot scan items outside scanning screen')
-            return False
-        
+    def add_item_to_cart(self, item):
         self.cart.append(item)
         self.subtotal += item['price']
-        print(f"Scanned: {item['name']} - ${item['price']:.2f}")
+        print(f"Added: {item['name']} - ${item['price']:.2f}")
         return True
 
     """
-    Simulated scanner that continuously reads barcodes
-    """
-    def _scanner_worker(self):
-        print("Scanner activated and ready to scan items")
-        scan_count = 0
-        
-        while not self._scanner_stop_event.is_set():
-            if self.current_screen != 'scanning':
-                # If we leave the scanning screen, pause the scanner
-                time.sleep(0.5)
-                continue
-                
-            # Simulate barcode scanning (in a real system, this would be hardware input)
-            barcode = random.choice(list(self.product_database.keys()))
-            item = self.lookup_item(barcode)
-            
-            if item:
-                self.scan_item(item)
-                scan_count += 1
-                
-                # Simulate time between scans
-                time.sleep(random.uniform(1.5, 3.0))
-                
-                # For demo purposes, stop after scanning 5 items
-                if scan_count >= 5:
-                    print("Please place scanned items in bagging area")
-                    # In a real system, you might pause here for weight verification
-                    time.sleep(2)
-                    scan_count = 0
-            else:
-                print("Unrecognized barcode, please try again")
-                time.sleep(1)
-
-    """
-    Start continuous scanning mode
-    """
-    def start_continuous_scanning(self):
-        if self.current_screen != 'scanning':
-            self.navigate_to('scanning')
-        
-        if self.scanner_active:
-            print("Scanner is already active")
-            return
-            
-        self.scanner_active = True
-        self._scanner_stop_event.clear()
-        self._scanner_thread = threading.Thread(target=self._scanner_worker)
-        self._scanner_thread.daemon = True  # Allow program to exit even if thread is running
-        self._scanner_thread.start()
-        
-        print('Continuous scanning activated - ready to scan multiple items')
-
-    """
-    Stop the continuous scanning process
-    """
-    def stop_continuous_scanning(self):
-        if not self.scanner_active:
-            print("Scanner is not active")
-            return
-            
-        self._scanner_stop_event.set()
-        if self._scanner_thread:
-            self._scanner_thread.join(timeout=1.0)  # Wait for scanner thread to finish
-        
-        self.scanner_active = False
-        print('Scanning completed')
-
-    """
-    Manually add an item by barcode
-    """
-    def add_item_by_barcode(self, barcode):
-        if self.current_screen != 'scanning':
-            print('Error: Cannot scan items outside scanning screen')
-            return False
-            
-        item = self.lookup_item(barcode)
-        if item:
-            return self.scan_item(item)
-        else:
-            print(f"Error: Barcode {barcode} not found in database")
-            return False
-
-    """
-    Remove the last scanned item
-    """
-    def remove_last_item(self):
-        if not self.cart:
-            print("Cart is empty, nothing to remove")
-            return False
-            
-        item = self.cart.pop()
-        self.subtotal -= item['price']
-        print(f"Removed: {item['name']} - ${item['price']:.2f}")
-        return True
-
-    """
-    Remove a specific item from the cart
+    Remove an item from the cart
     """
     def remove_item(self, index):
         if index < 0 or index >= len(self.cart):
@@ -197,82 +82,258 @@ class SelfCheckoutKiosk:
         return True
 
     """
-    Open the discounts section
+    Begin shopping process with a while loop for scanning
     """
-    def open_discounts(self):
-        # Stop scanning when moving to discounts
-        if self.scanner_active:
-            self.stop_continuous_scanning()
+    def begin_shopping(self):
+        self.navigate_to('scanning')
+        print('Shopping session started')
+        
+        # Main scanning loop
+        scanning = True
+        while scanning:
+            print("\nScanning Mode - Options:")
+            print("1. Scan item (simulated)")
+            print("2. Enter barcode manually")
+            print("3. View cart")
+            print("4. Remove item")
+            print("5. Proceed to discounts")
+            print("6. Proceed to payment")
+            print("7. Cancel shopping")
             
+            choice = input("Enter choice (1-7): ")
+            
+            if choice == '1':
+                # Simulate scanning a random item
+                barcode = random.choice(list(self.product_database.keys()))
+                item = self.lookup_item(barcode)
+                if item:
+                    self.add_item_to_cart(item)
+                    print(f"Successfully scanned: {item['name']}")
+                    time.sleep(1)  # Brief pause to simulate scanning
+                
+            elif choice == '2':
+                # Manual barcode entry
+                barcode = input("Enter barcode: ")
+                item = self.lookup_item(barcode)
+                if item:
+                    self.add_item_to_cart(item)
+                else:
+                    print(f"Barcode {barcode} not found in database")
+            
+            elif choice == '3':
+                # View cart contents
+                self.show_cart_summary()
+            
+            elif choice == '4':
+                # Remove an item
+                self.show_cart_summary()
+                if self.cart:
+                    try:
+                        index = int(input("Enter item number to remove (1-based): ")) - 1
+                        self.remove_item(index)
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+                else:
+                    print("Cart is empty. Nothing to remove.")
+            
+            elif choice == '5':
+                # End scanning and go to discounts
+                scanning = False
+                self.process_discounts()
+            
+            elif choice == '6':
+                # Skip discounts and go to payment
+                scanning = False
+                self.proceed_to_payment()
+            
+            elif choice == '7':
+                # Cancel entire shopping session
+                scanning = False
+                self.cancel()
+            
+            else:
+                print("Invalid choice. Please try again.")
+
+    """
+    Process discounts using a while loop
+    """
+    def process_discounts(self):
         self.navigate_to('discounts')
         print('Discount section opened')
-
-    """
-    Apply a discount to the transaction
-    """
-    def apply_discount(self, discount):
-        if self.current_screen != 'discounts':
-            print('Error: Cannot apply discount outside discounts screen')
-            return False
         
-        self.discounts_applied.append(discount)
-        self.total_discount += discount['amount']
-        print(f"Applied discount: {discount['code']} - ${discount['amount']:.2f}")
-        return True
-
-    """
-    Apply a discount code (simulated lookup)
-    """
-    def apply_discount_code(self, code):
-        discount_codes = {
-            'SAVE10': {'code': 'SAVE10', 'amount': 1.00, 'description': '$1.00 off your purchase'},
-            'SPRING25': {'code': 'SPRING25', 'amount': 2.50, 'description': '$2.50 off your purchase'},
-            '5PERCENTOFF': {'code': '5PERCENTOFF', 'amount': self.subtotal * 0.05, 'description': '5% off your total'}
-        }
-        
-        if code in discount_codes:
-            return self.apply_discount(discount_codes[code])
-        else:
-            print(f"Invalid discount code: {code}")
-            return False
-
-    """
-    Return to scanning after applying discounts
-    """
-    def resume_scanning(self):
-        if self.current_screen != 'discounts':
-            print('Error: Can only resume scanning from discounts screen')
-            return False
+        # Main discount processing loop
+        applying_discounts = True
+        while applying_discounts:
+            print("\nDiscount Mode - Options:")
+            print("1. Apply discount code")
+            print("2. Apply percentage discount")
+            print("3. View applied discounts")
+            print("4. View cart")
+            print("5. Return to scanning")
+            print("6. Proceed to payment")
+            print("7. Cancel shopping")
             
-        self.navigate_to('scanning')
-        print('Returned to scanning')
-        self.start_continuous_scanning()
-        return True
+            choice = input("Enter choice (1-7): ")
+            
+            if choice == '1':
+                # Apply discount code
+                code = input("Enter discount code: ").upper()
+                if code in self.discount_database:
+                    discount = self.discount_database[code].copy()
+                    
+                    # Handle percentage discounts
+                    if 'PERCENT' in code:
+                        # Extract percentage from description
+                        percent = int(discount['description'].split('%')[0])
+                        discount['amount'] = round(self.subtotal * (percent / 100), 2)
+                        print(f"Applied {percent}% discount: ${discount['amount']:.2f}")
+                    
+                    self.discounts_applied.append(discount)
+                    self.total_discount += discount['amount']
+                    print(f"Applied discount: {discount['code']} - ${discount['amount']:.2f}")
+                else:
+                    print(f"Invalid discount code: {code}")
+            
+            elif choice == '2':
+                # Apply custom percentage discount
+                try:
+                    percent = float(input("Enter discount percentage: "))
+                    if 0 <= percent <= 100:
+                        amount = round(self.subtotal * (percent / 100), 2)
+                        discount = {
+                            'code': f'CUSTOM{percent}%',
+                            'amount': amount,
+                            'description': f'{percent}% off your total'
+                        }
+                        self.discounts_applied.append(discount)
+                        self.total_discount += amount
+                        print(f"Applied {percent}% discount: ${amount:.2f}")
+                    else:
+                        print("Percentage must be between 0 and 100")
+                except ValueError:
+                    print("Invalid input. Please enter a number.")
+            
+            elif choice == '3':
+                # View applied discounts
+                if self.discounts_applied:
+                    print("\n--- Applied Discounts ---")
+                    for d in self.discounts_applied:
+                        print(f"{d['code']} - ${d['amount']:.2f}")
+                    print(f"Total discount: ${self.total_discount:.2f}")
+                    print("-----------------------")
+                else:
+                    print("No discounts applied")
+            
+            elif choice == '4':
+                # View cart contents
+                self.show_cart_summary()
+            
+            elif choice == '5':
+                # Return to scanning
+                applying_discounts = False
+                self.navigate_to('scanning')
+                self.begin_shopping()  # Resume scanning loop
+            
+            elif choice == '6':
+                # End discounts and go to payment
+                applying_discounts = False
+                self.proceed_to_payment()
+            
+            elif choice == '7':
+                # Cancel entire shopping session
+                applying_discounts = False
+                self.cancel()
+            
+            else:
+                print("Invalid choice. Please try again.")
+
+    """
+    Cancel the current action and return to home
+    """
+    def cancel(self):
+        self.navigate_to('home')
+        print('Action cancelled, returned to home screen')
+        
+        # Reset kiosk state
+        self.cart = []
+        self.subtotal = 0
+        self.discounts_applied = []
+        self.total_discount = 0
+        self.payment_method = None
+        self.payment_status = None
+        self.receipt_printed = False
+
+    """
+    Show a summary of the current cart
+    """
+    def show_cart_summary(self):
+        if not self.cart:
+            print("Your cart is empty")
+            return
+            
+        print("\n--- Cart Summary ---")
+        for i, item in enumerate(self.cart):
+            print(f"{i+1}. {item['name']} - ${item['price']:.2f}")
+        print(f"Subtotal: ${self.subtotal:.2f}")
+        if self.discounts_applied:
+            print(f"Discounts: -${self.total_discount:.2f}")
+        print(f"Total: ${self.get_total_due():.2f}")
+        print("-------------------\n")
 
     """
     Proceed to payment from either scanning or discounts
     """
     def proceed_to_payment(self):
-        if self.current_screen != 'scanning' and self.current_screen != 'discounts':
-            print('Error: Cannot proceed to payment from current screen')
-            return False
-        
-        # Stop scanning if active
-        if self.scanner_active:
-            self.stop_continuous_scanning()
-            
         self.navigate_to('payment')
         print('Ready for payment selection')
-        return True
+        
+        # Payment selection loop
+        selecting_payment = True
+        while selecting_payment:
+            print("\nPayment Mode - Options:")
+            print("1. Pay by Card")
+            print("2. Pay by E-wallet")
+            print("3. Pay by Cash")
+            print("4. View cart and total")
+            print("5. Cancel payment")
+            
+            choice = input("Enter choice (1-5): ")
+            
+            if choice == '1':
+                self.select_payment('card')
+                self.process_payment(True)  # Simulate successful payment
+                selecting_payment = False
+            
+            elif choice == '2':
+                self.select_payment('e-wallet')
+                self.process_payment(True)  # Simulate successful payment
+                selecting_payment = False
+            
+            elif choice == '3':
+                self.select_payment('cash')
+                selecting_payment = False
+            
+            elif choice == '4':
+                self.show_cart_summary()
+                print(f"Total to pay: ${self.get_total_due():.2f}")
+            
+            elif choice == '5':
+                selecting_payment = False
+                print("Payment cancelled")
+                # Ask if they want to return to scanning or cancel
+                if input("Return to scanning? (y/n): ").lower() == 'y':
+                    self.navigate_to('scanning')
+                    self.begin_shopping()
+                else:
+                    self.cancel()
+            
+            else:
+                print("Invalid choice. Please try again.")
 
     """
     Select a payment method
     """
     def select_payment(self, method):
-        if self.current_screen != 'payment':
-            print('Error: Cannot select payment method outside payment screen')
-            return False
-        
         valid_methods = ['e-wallet', 'card', 'cash']
         if method not in valid_methods:
             print(f"Error: Invalid payment method: {method}")
@@ -289,9 +350,12 @@ class SelfCheckoutKiosk:
         elif method == 'cash':
             print(f"Please insert ${self.get_total_due():.2f} in cash")
             # In a real implementation, this would interface with a cash acceptor
+            time.sleep(2)  # Simulate cash insertion
+            print("Cash accepted")
             self.navigate_to('complete')
             self.payment_status = 'successful'
             print('Cash payment processed successfully. Transaction complete.')
+            self.complete_transaction()
             return True
         
         return True
@@ -304,16 +368,36 @@ class SelfCheckoutKiosk:
             print('Error: Cannot process payment from current screen')
             return False
         
+        # Simulate payment processing
+        print("Processing payment...")
+        time.sleep(2)
+        
         if success:
             self.payment_status = 'successful'
             self.navigate_to('complete')
             print('Payment successful! Transaction complete.')
+            self.complete_transaction()
         else:
             self.payment_status = 'failed'
             self.navigate_to('payment')
             print('Payment failed. Please select a payment method again.')
         
         return success
+
+    """
+    Complete the transaction and handle receipt
+    """
+    def complete_transaction(self):
+        # Ask about receipt
+        if input("Would you like a receipt? (y/n): ").lower() == 'y':
+            self.print_receipt()
+        else:
+            print("Receipt skipped.")
+            self.navigate_to('receipt')  # Still mark transaction as complete
+            
+        # Ask about starting a new transaction
+        if input("Start a new transaction? (y/n): ").lower() == 'y':
+            self.start_new_transaction()
 
     """
     Print receipt after successful transaction
@@ -377,6 +461,9 @@ class SelfCheckoutKiosk:
         # Return to home screen
         self.navigate_to('home')
         print('Ready for new transaction')
+        
+        # Start shopping again
+        self.begin_shopping()
 
     """
     Check if the transaction is complete
@@ -405,124 +492,22 @@ class SelfCheckoutKiosk:
             'total_due': round(self.get_total_due(), 2),
             'payment_method': self.payment_method,
             'payment_status': self.payment_status,
-            'receipt_printed': self.receipt_printed,
-            'scanner_active': self.scanner_active
+            'receipt_printed': self.receipt_printed
         }
 
-    """
-    Show a summary of the current cart
-    """
-    def show_cart_summary(self):
-        if not self.cart:
-            print("Your cart is empty")
-            return
-            
-        print("\n--- Cart Summary ---")
-        for i, item in enumerate(self.cart):
-            print(f"{i+1}. {item['name']} - ${item['price']:.2f}")
-        print(f"Subtotal: ${self.subtotal:.2f}")
-        if self.discounts_applied:
-            print(f"Discounts: -${self.total_discount:.2f}")
-        print(f"Total: ${self.get_total_due():.2f}")
-        print("-------------------\n")
 
-
-# Example usage with automated continuous scanning simulation
-def demonstrate_kiosk():
+# Main function to run the kiosk
+def main():
+    print("=" * 50)
+    print("     SELF-CHECKOUT KIOSK SYSTEM")
+    print("=" * 50)
+    print("Welcome to the interactive self-checkout system!")
+    
     kiosk = SelfCheckoutKiosk()
     
-    # Start shopping (automatically starts scanning)
+    # Start the shopping process with the main while loop
     kiosk.begin_shopping()
-    
-    # Wait for items to be scanned automatically
-    print("Waiting for automatic scanning...")
-    # In a real application this would be an event loop or GUI
-    time.sleep(10)  # Wait for simulated scanning to occur
-    
-    # Stop scanning and show what's in the cart
-    kiosk.stop_continuous_scanning()
-    kiosk.show_cart_summary()
-    
-    # Manually add another item
-    kiosk.add_item_by_barcode('654987321')  # Add cereal
-    
-    # Apply a discount
-    kiosk.open_discounts()
-    kiosk.apply_discount_code('SAVE10')
-    
-    # Return to scanning and scan one more item
-    kiosk.resume_scanning()
-    time.sleep(3)  # Wait for another item to be scanned
-    kiosk.stop_continuous_scanning()  
-    
-    # Proceed to payment
-    kiosk.proceed_to_payment()
-    
-    # Select payment method
-    kiosk.select_payment('card')
-    
-    # Process payment (success)
-    kiosk.process_payment(True)
-    
-    # Print receipt
-    kiosk.print_receipt()
-    
-    # Check final state
-    print('Final kiosk state:')
-    print(kiosk.get_kiosk_state())
-    
-    # Start new transaction
-    kiosk.start_new_transaction()
 
 
-# Interactive mode demonstration for manual testing
-def interactive_demo():
-    kiosk = SelfCheckoutKiosk()
-    print("Self-Checkout Kiosk Interactive Demo")
-    print("Commands: start, scan, view, discount, pay, receipt, cancel, exit")
-    
-    running = True
-    while running:
-        cmd = input("\nEnter command: ").strip().lower()
-        
-        if cmd == "start":
-            kiosk.begin_shopping()
-        elif cmd == "scan":
-            if kiosk.scanner_active:
-                kiosk.stop_continuous_scanning()
-                print("Scanning paused. Enter 'scan' again to resume.")
-            else:
-                kiosk.start_continuous_scanning()
-        elif cmd == "view":
-            kiosk.show_cart_summary()
-            print(f"Current screen: {kiosk.current_screen}")
-        elif cmd == "discount":
-            kiosk.open_discounts()
-            code = input("Enter discount code (SAVE10, SPRING25, 5PERCENTOFF): ")
-            kiosk.apply_discount_code(code)
-        elif cmd == "pay":
-            kiosk.proceed_to_payment()
-            method = input("Payment method (card, e-wallet, cash): ")
-            kiosk.select_payment(method)
-            if method in ["card", "e-wallet"]:
-                kiosk.process_payment(True)
-        elif cmd == "receipt":
-            kiosk.print_receipt()
-        elif cmd == "cancel":
-            kiosk.cancel()
-        elif cmd == "exit":
-            running = False
-        else:
-            print("Unknown command")
-    
-    print("Demo ended")
-
-
-# Run the demonstration
 if __name__ == "__main__":
-    # Choose which demo to run
-    demo_type = input("Run [a]utomated or [i]nteractive demo? ").lower()
-    if demo_type.startswith('i'):
-        interactive_demo()
-    else:
-        demonstrate_kiosk()
+    main()
