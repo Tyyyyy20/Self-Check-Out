@@ -45,12 +45,15 @@ def payment_selection():
         print("\n--- PAYMENT SELECTION ---")
         print("1. Pay with E-Wallet")
         print("2. Pay with Card")
+        print("3. Cancel")
         choice = input("Choose: ")
 
         if choice == "1":
             return scan_qr()
         elif choice == "2":
             return reading_card()
+        elif choice == "2":
+            return home_page()
         else:
             print("Invalid choice.")
 
