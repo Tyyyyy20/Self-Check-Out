@@ -52,7 +52,7 @@ def payment_selection():
             return scan_qr()
         elif choice == "2":
             return reading_card()
-        elif choice == "2":
+        elif choice == "3":
             return home_page()
         else:
             print("Invalid choice.")
